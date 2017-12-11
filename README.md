@@ -1,16 +1,13 @@
-# mio-utun
+# tokio-utun
 
-[Documentation](https://docs.rs/mio-utun)
+[Documentation](https://docs.rs/tokio-utun)
 
-This crate is a mio wrapper for the utun interface (userspace tunnel) used by macOS.
-
-[mio]: https://github.com/carllerche/mio
+This crate is a tokio wrapper for the utun interface (userspace tunnel) used by macOS.
 
 ```toml
 # Cargo.toml
 [dependencies]
-mio-utun = "0.6"
-mio = "0.6"
+tokio-utun = "0.6"
 ```
 
 ## Notice
@@ -19,9 +16,8 @@ This is a work-in-progress with documentation and further testing and features a
 
 ## Usage
 
-There is only one export, `UtunStream`, and it behaves similarly to the standard
-`TcpStream`.
-
+There is only one export, `UtunStream`. I don't recommend using this unless you're ready to
+debug it on your own.
 
 # License
 
