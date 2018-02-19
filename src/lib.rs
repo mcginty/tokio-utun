@@ -6,8 +6,6 @@
 extern crate bytes;
 #[macro_use]
 extern crate futures;
-extern crate iovec;
-extern crate libc;
 #[macro_use]
 extern crate tokio_core;
 extern crate tokio_io;
@@ -19,7 +17,7 @@ extern crate log;
 mod frame;
 pub use self::frame::{UtunCodec, UtunFramed};
 
-use std::io;
+use std::io::{self, Read, Write};
 use futures::Async;
 use tokio_core::reactor::{PollEvented, Handle};
 
@@ -59,41 +57,6 @@ impl UtunStream {
         frame::new(self, codec)
     }
 
-
-    /// Sends data on the socket to the address previously bound via connect().
-    /// On success, returns the number of bytes written.
-    pub fn send(&self, buf: &[u8]) -> io::Result<usize> {
-        if let Async::NotReady = self.io.poll_write() {
-            return Err(io::ErrorKind::WouldBlock.into())
-        }
-        match self.io.get_ref().send(buf) {
-            Ok(n) => Ok(n),
-            Err(e) => {
-                if e.kind() == io::ErrorKind::WouldBlock {
-                    self.io.need_write();
-                }
-                Err(e)
-            }
-        }
-    }
-
-    /// Receives data from the socket previously bound with connect().
-    /// On success, returns the number of bytes read.
-    pub fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
-        if let Async::NotReady = self.io.poll_read() {
-            return Err(io::ErrorKind::WouldBlock.into())
-        }
-        match self.io.get_ref().recv(buf) {
-            Ok(n) => Ok(n),
-            Err(e) => {
-                if e.kind() == io::ErrorKind::WouldBlock {
-                    self.io.need_read();
-                }
-                Err(e)
-            }
-        }
-    }
-
     /// Test whether this socket is ready to be read or not.
     ///
     /// If the socket is *not* readable then the current task is scheduled to
@@ -115,3 +78,17 @@ impl UtunStream {
     }
 }
 
+impl Read for UtunStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.io.read(buf)
+    }
+}
+
+impl Write for UtunStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.io.write(buf)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.io.flush()
+    }
+}

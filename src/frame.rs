@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self, Read, Write};
 
 use futures::{Async, Poll, Stream, Sink, StartSend, AsyncSink};
 
@@ -68,7 +68,7 @@ impl<C: UtunCodec> Stream for UtunFramed<C> {
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Option<C::In>, io::Error> {
-        let n = try_nb!(self.socket.recv(&mut self.rd));
+        let n = try_nb!(self.socket.read(&mut self.rd));
         trace!("received {} bytes, decoding", n);
         let frame = try!(self.codec.decode(&self.rd[..n]));
         trace!("frame decoded from buffer");
@@ -103,7 +103,7 @@ impl<C: UtunCodec> Sink for UtunFramed<C> {
         }
 
         trace!("flushing frame; length={}", self.wr.len());
-        let n = try_nb!(self.socket.send(&self.wr));
+        let n = try_nb!(self.socket.write(&self.wr));
         trace!("written {}", n);
 
         let wrote_all = n == self.wr.len();
