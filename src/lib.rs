@@ -3,13 +3,10 @@
 #![cfg(unix)]
 #![doc(html_root_url = "https://docs.rs/tokio-utun")]
 
-extern crate bytes;
 #[macro_use]
 extern crate futures;
 #[macro_use]
 extern crate tokio_core;
-extern crate tokio_io;
-extern crate mio;
 extern crate mio_utun;
 #[macro_use]
 extern crate log;
