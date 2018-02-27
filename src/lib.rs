@@ -15,6 +15,7 @@ mod frame;
 pub use self::frame::{UtunCodec, UtunFramed};
 
 use std::io::{self, Read, Write};
+use std::os::unix::io::{FromRawFd, RawFd};
 use futures::Async;
 use tokio_core::reactor::{PollEvented, Handle};
 
@@ -28,7 +29,13 @@ impl UtunStream {
     pub fn connect(name: &str, handle: &Handle) -> io::Result<UtunStream> {
         let stream = mio_utun::UtunStream::connect(name)?;
         let io = PollEvented::new(stream, handle)?;
-        Ok(UtunStream { io: io })
+        Ok(UtunStream { io })
+    }
+
+    pub fn from_fd(fd: RawFd, handle: &Handle) -> io::Result<UtunStream> {
+        let stream = unsafe { mio_utun::UtunStream::from_raw_fd(fd) };
+        let io = PollEvented::new(stream, handle)?;
+        Ok(UtunStream { io })
     }
 
     /// Provides a `Stream` and `Sink` interface for reading and writing to this
