@@ -1,6 +1,6 @@
 [package]
 name = "tokio-utun"
-version = "0.1.10"
+version = "0.1.11"
 authors = ["Jake McGinty <me@jake.su>"]
 license = "MIT/Apache-2.0"
 readme = "README.md"
@@ -13,8 +13,8 @@ Utun bindings for Tokio
 categories = ["asynchronous"]
 
 [dependencies]
-futures = "0.1.11"
-log = "0.3"
+futures = "^0.1"
+log = "^0.4"
 mio = "^0.6"
 mio-utun = "^0.6.15"
 tokio-core = "^0.1"

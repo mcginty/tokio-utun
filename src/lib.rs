@@ -38,6 +38,10 @@ impl UtunStream {
         Ok(UtunStream { io })
     }
 
+    pub fn name(&self) -> io::Result<String> {
+        self.io.get_ref().name()
+    }
+
     /// Provides a `Stream` and `Sink` interface for reading and writing to this
     /// `UdpSocket` object, using the provided `UdpCodec` to read and write the
     /// raw data.
