@@ -3,21 +3,23 @@
 #![cfg(unix)]
 #![doc(html_root_url = "https://docs.rs/tokio-utun")]
 
-#[macro_use]
 extern crate futures;
-#[macro_use]
-extern crate tokio_core;
-extern crate mio_utun;
-#[macro_use]
+extern crate tokio_io;
 extern crate log;
-
-mod frame;
-pub use self::frame::{UtunCodec, UtunFramed};
+extern crate bytes;
+extern crate mio;
+extern crate mio_utun;
+extern crate tokio_codec;
+extern crate tokio_reactor;
 
 use std::io::{self, Read, Write};
 use std::os::unix::io::{FromRawFd, RawFd};
-use futures::Async;
-use tokio_core::reactor::{PollEvented, Handle};
+use bytes::{Buf, BufMut};
+use futures::{Async, Poll};
+use mio::Ready;
+use tokio_reactor::{PollEvented, Handle};
+use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_codec::{Framed, Encoder, Decoder};
 
 /// The primary class for this crate, a stream of tunneled traffic.
 #[derive(Debug)]
@@ -26,15 +28,27 @@ pub struct UtunStream {
 }
 
 impl UtunStream {
-    pub fn connect(name: &str, handle: &Handle) -> io::Result<UtunStream> {
+    pub fn connect(name: &str) -> io::Result<UtunStream> {
         let stream = mio_utun::UtunStream::connect(name)?;
-        let io = PollEvented::new(stream, handle)?;
+        let io = PollEvented::new(stream);
         Ok(UtunStream { io })
     }
 
-    pub fn from_fd(fd: RawFd, handle: &Handle) -> io::Result<UtunStream> {
+    pub fn connect_with_handle(name: &str, handle: &Handle) -> io::Result<UtunStream> {
+        let stream = mio_utun::UtunStream::connect(name)?;
+        let io = PollEvented::new_with_handle(stream, handle)?;
+        Ok(UtunStream { io })
+    }
+
+    pub fn from_fd(fd: RawFd) -> UtunStream {
         let stream = unsafe { mio_utun::UtunStream::from_raw_fd(fd) };
-        let io = PollEvented::new(stream, handle)?;
+        let io = PollEvented::new(stream);
+        UtunStream { io }
+    }
+
+    pub fn from_fd_with_handle(fd: RawFd, handle: &Handle) -> io::Result<UtunStream> {
+        let stream = unsafe { mio_utun::UtunStream::from_raw_fd(fd) };
+        let io = PollEvented::new_with_handle(stream, handle)?;
         Ok(UtunStream { io })
     }
 
@@ -61,8 +75,8 @@ impl UtunStream {
     /// calling `split` on the `UdpFramed` returned by this method, which will
     /// break them into separate objects, allowing them to interact more
     /// easily.
-    pub fn framed<C: UtunCodec>(self, codec: C) -> UtunFramed<C> {
-        frame::new(self, codec)
+    pub fn framed<C: Decoder + Encoder>(self, codec: C) -> Framed<UtunStream, C> {
+        Framed::new(self, codec)
     }
 
     /// Test whether this socket is ready to be read or not.
@@ -71,8 +85,8 @@ impl UtunStream {
     /// get a notification when the socket does become readable. That is, this
     /// is only suitable for calling in a `Future::poll` method and will
     /// automatically handle ensuring a retry once the socket is readable again.
-    pub fn poll_read(&self) -> Async<()> {
-        self.io.poll_read()
+    pub fn poll_read_ready(&self, ready: Ready) -> Poll<Ready, io::Error> {
+        self.io.poll_read_ready(ready)
     }
 
     /// Test whether this socket is ready to be written to or not.
@@ -81,8 +95,8 @@ impl UtunStream {
     /// get a notification when the socket does become writable. That is, this
     /// is only suitable for calling in a `Future::poll` method and will
     /// automatically handle ensuring a retry once the socket is writable again.
-    pub fn poll_write(&self) -> Async<()> {
-        self.io.poll_write()
+    pub fn poll_write_ready(&self) -> Poll<Ready, io::Error> {
+        self.io.poll_write_ready()
     }
 }
 
@@ -98,5 +112,45 @@ impl Write for UtunStream {
     }
     fn flush(&mut self) -> io::Result<()> {
         self.io.flush()
+    }
+}
+
+impl AsyncRead for UtunStream {
+    unsafe fn prepare_uninitialized_buffer(&self, _: &mut [u8]) -> bool {
+        false
+    }
+
+    fn read_buf<B: BufMut>(&mut self, buf: &mut B) -> Poll<usize, io::Error> {
+        match self.io.read(unsafe { buf.bytes_mut() }) {
+            Ok(n) => {
+                unsafe { buf.advance_mut(n); }
+                Ok(Async::Ready(n))
+            },
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                self.io.clear_read_ready(Ready::readable())?;
+                Ok(Async::NotReady)
+            },
+            Err(e) => Err(e)
+        }
+    }
+}
+
+impl AsyncWrite for UtunStream {
+    fn shutdown(&mut self) -> Poll<(), io::Error> {
+        Ok(().into())
+    }
+
+    fn write_buf<B: Buf>(&mut self, buf: &mut B) -> Poll<usize, io::Error> {
+        match self.io.write(buf.bytes()) {
+            Ok(n) => {
+                buf.advance(n);
+                Ok(Async::Ready(n))
+            },
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                self.io.clear_write_ready()?;
+                Ok(Async::NotReady)
+            },
+            Err(e) => Err(e)
+        }
     }
 }

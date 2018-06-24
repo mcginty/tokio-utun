@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cargo build
+cargo test --no-run
 sudo RUST_BACKTRACE=1 cargo test &
 sleep 3
 sudo ifconfig utun5 10.25.0.1/24 10.25.0.2 netmask 255.255.255.255 && sudo route add 10.25/24 10.25.0.1
