@@ -121,16 +121,22 @@ impl AsyncRead for UtunStream {
     }
 
     fn read_buf<B: BufMut>(&mut self, buf: &mut B) -> Poll<usize, io::Error> {
-        match self.io.read(unsafe { buf.bytes_mut() }) {
-            Ok(n) => {
-                unsafe { buf.advance_mut(n); }
-                Ok(Async::Ready(n))
-            },
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                self.io.clear_read_ready(Ready::readable())?;
-                Ok(Async::NotReady)
-            },
-            Err(e) => Err(e)
+        if let Async::NotReady = self.poll_read_ready(Ready::readable())? {
+            return Ok(Async::NotReady);
+        }
+
+        unsafe {
+            match self.io.read(buf.bytes_mut()) {
+                Ok(n) => {
+                    buf.advance_mut(n);
+                    Ok(Async::Ready(n))
+                },
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    self.io.clear_read_ready(Ready::readable())?;
+                    Ok(Async::NotReady)
+                },
+                Err(e) => Err(e)
+            }
         }
     }
 }
@@ -141,6 +147,10 @@ impl AsyncWrite for UtunStream {
     }
 
     fn write_buf<B: Buf>(&mut self, buf: &mut B) -> Poll<usize, io::Error> {
+        if let Async::NotReady = self.poll_write_ready()? {
+            return Ok(Async::NotReady);
+        }
+
         match self.io.write(buf.bytes()) {
             Ok(n) => {
                 buf.advance(n);
